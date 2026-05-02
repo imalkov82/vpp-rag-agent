@@ -1,2 +1,208 @@
-# vpp-rag-agent
-A LangGraph agent that fetches real-time electricity prices from the ENTSO-E Transparency Platform API
+# VPP RAG Agent
+
+A LangGraph-powered agent for electricity price forecasting and grid regulation Q&A over ENTSO-E data.
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                           USER QUERY                                     │
+│                  "What's the current price in Germany?"                │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        LANGGRAPH AGENT                                  │
+│  ┌─────────────┐    ┌──────────────┐    ┌────────────────────────────┐  │
+│  │  CLASSIFY  │───▶│   ROUTER      │───▶│  TOOL EXECUTION             │  │
+│  │             │    │              │    │  ┌────────────────────────┐ │  │
+│  │ PRICE?     │    │ get_prices   │    │  │ get_electricity_prices  │ │  │
+│  │ REGULATION?   │ search_regs  │    │  │ search_regulations      │ │  │
+│  │ BOTH?      │    │ get_both     │    │  └────────────────────────┘ │  │
+│  │ UNKNOWN?   │    │ general      │    └────────────────────────────┘  │
+│  └─────────────┘    └──────────────┘              │                    │
+└───────────────────────────────────────────────────┼────────────────────┘
+                                                ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                           TOOLS LAYER                                    │
+│  ┌─────────────────────────┐    ┌─────────────────────────────────────┐ │
+│  │  ENTSO-E API CLIENT     │    │  RAG SYSTEM (ChromaDB + PDFloader)   │ │
+│  │                         │    │                                     │ │
+│  │ GET /api                │    │  data/pdfs/*.pdf                    │ │
+│  │  - Day-ahead prices     │    │       │                             │ │
+│  │  - Real-time updates    │    │       ▼                             │ │
+│  │  - Multiple zones        │    │  ┌─────────┐  ┌─────────┐           │ │
+│  └─────────────────────────┘    │  │ Chunk 1│  │ Chunk 2│  ...      │ │
+│                                │  └─────────┘  └─────────┘           │ │
+│                                │        │            │                  │ │
+│                                │        ▼            ▼                  │ │
+│                                │  ┌─────────────────────────┐           │ │
+│                                │  │   Chroma Vector Store   │           │ │
+│                                │  │  (Ollama embeddings)    │           │ │
+│                                │  └─────────────────────────┘           │ │
+│                                └─────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        RESPONSE OUTPUT                                   │
+│  - Answer with citations                                                │
+│  - Source pricing data                                                  │
+│  - Relevant regulation excerpts                                        │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+## Tech Stack
+
+| Component | Technology |
+|------------|-------------|
+| Agent Orchestration | LangGraph |
+| LLM | Ollama (`deepseek-r1:8b`, local) |
+| Embeddings | Ollama (`nomic-embed-text`, local) |
+| Vector Store | ChromaDB (persisted in `.chroma_db/`) |
+| PDF Processing | pypdf |
+| API Client | requests + lxml |
+| Validation | Pydantic |
+
+## Quick Start
+
+This project is managed with [uv](https://docs.astral.sh/uv/). You don't need
+to create a venv manually — `uv sync` handles it.
+
+1. **Install dependencies** (creates `.venv` + installs everything from `uv.lock`):
+   ```bash
+   # Runtime only:
+   uv sync
+
+   # Runtime + dev tooling (pytest, black, mypy, flake8, pre-commit, ...):
+   uv sync --all-groups
+   ```
+
+2. **Install and start Ollama**, then pull the required models:
+   ```bash
+   # https://ollama.com/download
+   ollama serve &
+   ollama pull deepseek-r1:8b
+   ollama pull nomic-embed-text
+   ```
+
+3. **Configure environment**:
+   ```bash
+   cp .env.example .env
+   # Edit .env and set ENTSOE_API_KEY
+   # (register at https://transparency.entsoe.eu/)
+   ```
+
+4. **Add PDF documents**:
+   - Place ENTSO-E grid regulation PDFs in `data/pdfs/`
+   - Example documents: Network Codes, Grid Connection Requirements
+
+5. **Run the agent**:
+   ```bash
+   # Ask a question (uv run executes inside the project venv)
+   uv run vpp-rag ask "What's the current electricity price in Germany?"
+
+   # Skip re-checking the index on every run:
+   uv run vpp-rag ask --no-index "..."
+
+   # Build (or rebuild) the vector store from data/pdfs/:
+   uv run vpp-rag index --rebuild
+
+   # Check Ollama, ENTSO-E key, vector store, and PDF corpus:
+   uv run vpp-rag health
+   ```
+
+## Development
+
+```bash
+# Install dev tooling
+uv sync --all-groups
+
+# Install git hooks
+uv run pre-commit install
+
+# Run all checks manually
+uv run pre-commit run --all-files
+
+# Individual tools
+uv run pytest
+uv run black src/ tests/
+uv run flake8 src/
+uv run mypy src/
+```
+
+## Adding / removing dependencies
+
+```bash
+# Runtime dep
+uv add langchain-experimental
+
+# Dev-only dep
+uv add --group dev ruff
+
+# Remove
+uv remove pkg-name
+
+# Update the lockfile after editing pyproject.toml by hand
+uv lock
+```
+
+## Project Structure
+
+```
+vpp-rag-agent/
+├── src/
+│   ├── __main__.py            # Click group: ask / health / index
+│   ├── health.py              # External-dependency health checks
+│   ├── agent/graph.py         # LangGraph state machine
+│   ├── entsoe/client.py       # ENTSO-E API client
+│   ├── rag/vectorstore.py     # Chroma-backed RAG over PDFs
+│   └── utils/
+│       ├── console.py         # Shared Rich console
+│       └── exceptions.py      # Domain exceptions
+├── tests/                     # pytest suite
+├── data/pdfs/                 # ENTSO-E regulation PDFs (git-ignored)
+├── .chroma_db/                # Persisted vector store (git-ignored)
+├── pyproject.toml             # Project metadata + tool config
+├── uv.lock                    # Locked dependency graph
+├── .python-version            # Pinned Python version (uv)
+├── .pre-commit-config.yaml    # flake8 / black / mypy / whitespace hooks
+├── .flake8                    # flake8 config (separate; no pyproject support)
+├── README.md
+└── .env.example
+```
+
+## Query Examples
+
+```bash
+# Price queries
+uv run vpp-rag ask "What's the day-ahead price for Germany tomorrow?"
+uv run vpp-rag ask "What's the current spot price in France?"
+
+# Regulation queries
+uv run vpp-rag ask "What are the balancing reserve requirements?"
+uv run vpp-rag ask "Explain the capacity allocation mechanism"
+
+# Combined queries
+uv run vpp-rag ask "How do balancing prices relate to the grid code requirements?"
+```
+
+## Bidding Zones
+
+Common ENTSO-E bidding zones:
+- `10YDE-EL------O` - Germany
+- `10YAT-APG------L` - Austria
+- `10YCH----------C` - Switzerland
+- `10YFR-1-----R` - France
+- `10YGB-2--------` - Great Britain
+
+## Why This Matters
+
+This project demonstrates:
+
+1. **Real-time data integration** - Pulling live electricity prices from ENTSO-E API
+2. **RAG over domain documents** - Searching ENTSO-E grid regulations
+3. **LangGraph orchestration** - Stateful multi-tool agent with routing logic
+4. **Energy domain expertise** - Understanding bidding zones, price types, grid codes
+
+The stack (LangGraph + ChromaDB + local Ollama models) is exactly what companies look for in ML/AI engineering roles.
