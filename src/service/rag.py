@@ -4,24 +4,17 @@ import hashlib
 import shutil
 from pathlib import Path
 from typing import List
-from pydantic import BaseModel
+
+from dotenv import load_dotenv
+from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from langchain_ollama import OllamaEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_chroma import Chroma
 from pypdf import PdfReader
-from dotenv import load_dotenv
+
+from src.models.internals import DocumentChunk
 
 load_dotenv()
-
-
-class DocumentChunk(BaseModel):
-    """A chunk of a document with metadata"""
-
-    content: str
-    source: str
-    page: int
-    chunk_id: str
 
 
 def _chunk_id(source: str, page: int, content: str) -> str:

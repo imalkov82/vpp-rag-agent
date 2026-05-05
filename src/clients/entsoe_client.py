@@ -4,28 +4,13 @@ import os
 import re
 from datetime import datetime, timedelta, timezone
 from typing import Optional
+
 import requests
-from pydantic import BaseModel
 from dotenv import load_dotenv
 
+from src.models.internals import DayAheadPrices, PricePoint
+
 load_dotenv()
-
-
-class PricePoint(BaseModel):
-    """Single electricity price point"""
-
-    timestamp: datetime
-    price: float
-    currency: str = "EUR"
-    unit: str = "MWh"
-
-
-class DayAheadPrices(BaseModel):
-    """Day-ahead electricity prices for a bidding zone"""
-
-    area: str
-    prices: list[PricePoint]
-    fetched_at: datetime
 
 
 _RESOLUTION_RE = re.compile(r"PT(\d+)([MH])")
