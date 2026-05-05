@@ -1,17 +1,11 @@
-"""Health checks for external dependencies — mirrors vppems-cmd's app/health.py."""
+"""Health checks for external dependencies."""
 
 import os
-from dataclasses import dataclass
 from pathlib import Path
 
 import requests
 
-
-@dataclass
-class HealthResult:
-    name: str
-    ok: bool
-    detail: str
+from src.models.internals import HealthResult
 
 
 def check_ollama(

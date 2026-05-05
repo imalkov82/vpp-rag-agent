@@ -23,7 +23,7 @@ dependencies = [
 ]
 
 [project.scripts]
-vpp-rag = "src.__main__:main"
+vpp-rag = "src.cli:main"
 
 [dependency-groups]
 dev = [

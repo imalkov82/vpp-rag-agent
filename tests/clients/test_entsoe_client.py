@@ -1,14 +1,12 @@
 """Tests for ENTSO-E API client"""
 
-import pytest
 from datetime import datetime, timezone
-from unittest.mock import patch, MagicMock
-from src.entsoe.client import (
-    EntsoeClient,
-    PricePoint,
-    DayAheadPrices,
-    _resolution_to_timedelta,
-)
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from src.clients.entsoe_client import EntsoeClient, _resolution_to_timedelta
+from src.models.internals import DayAheadPrices, PricePoint
 
 
 class TestPricePoint:
@@ -89,7 +87,7 @@ class TestEntsoeClient:
             assert zone.startswith("10Y")
             assert len(zone) > 0
 
-    @patch("src.entsoe.client.requests.get")
+    @patch("src.clients.entsoe_client.requests.get")
     def test_make_request_success(self, mock_get):
         mock_response = MagicMock()
         mock_response.text = "<root></root>"
@@ -103,7 +101,7 @@ class TestEntsoeClient:
         assert call_args.kwargs["params"]["securityToken"] == "test_key"
         mock_response.raise_for_status.assert_called_once()
 
-    @patch("src.entsoe.client.requests.get")
+    @patch("src.clients.entsoe_client.requests.get")
     def test_make_request_timeout(self, mock_get):
         import requests
 

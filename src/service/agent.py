@@ -1,16 +1,19 @@
 """LangGraph agent for electricity price and grid regulation Q&A"""
 
-from enum import Enum
-from typing import TypedDict, Optional, List
-from pydantic import BaseModel
-from langgraph.graph import StateGraph, END
-from langgraph.graph.state import CompiledStateGraph
+from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_ollama import ChatOllama
-from dotenv import load_dotenv
+from langgraph.graph import END, StateGraph
+from langgraph.graph.state import CompiledStateGraph
 
-from src.entsoe.client import get_default_client
-from src.rag.vectorstore import get_default_rag
+from src.clients.entsoe_client import get_default_client
+from src.models.internals import (
+    AgentInput,
+    AgentOutput,
+    AgentState,
+    QueryType,
+)
+from src.service.rag import get_default_rag
 
 load_dotenv()
 
@@ -38,43 +41,6 @@ def _tokenize(text: str) -> set[str]:
         word
         for word in "".join(c.lower() if c.isalnum() else " " for c in text).split()
     )
-
-
-class QueryType(str, Enum):
-    """Types of queries the agent can handle"""
-
-    PRICE = "price"
-    REGULATION = "regulation"
-    BOTH = "both"
-    UNKNOWN = "unknown"
-
-
-class AgentState(TypedDict):
-    """State of the agent"""
-
-    messages: List
-    query_type: Optional[QueryType]
-    prices: Optional[dict]
-    regulation_context: Optional[str]
-    final_answer: Optional[str]
-    error: Optional[str]
-    bidding_zone: str
-
-
-class AgentInput(BaseModel):
-    """Input to the agent"""
-
-    query: str
-    bidding_zone: str = "10YDE-EL------O"
-
-
-class AgentOutput(BaseModel):
-    """Output from the agent"""
-
-    answer: str
-    sources: List[dict]
-    prices: Optional[dict]
-    error: Optional[str] = None
 
 
 class VppAgent:
