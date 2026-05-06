@@ -149,25 +149,39 @@ uv lock
 
 ## Project Structure
 
+The codebase is organized by concern: external API calls live in `clients/`,
+CLI surface in `cli.py` + `cmd/`, business logic in `service/`, and shared
+data classes in `models/internals.py`.
+
 ```
 vpp-rag-agent/
 ├── src/
-│   ├── __main__.py            # Click group: ask / health / index
-│   ├── health.py              # External-dependency health checks
-│   ├── agent/graph.py         # LangGraph state machine
-│   ├── entsoe/client.py       # ENTSO-E API client
-│   ├── rag/vectorstore.py     # Chroma-backed RAG over PDFs
+│   ├── cli.py                      # Click group; wires up subcommands
+│   ├── health.py                   # External-dependency health checks
+│   ├── clients/
+│   │   └── entsoe_client.py        # ENTSO-E Transparency Platform client
+│   ├── cmd/
+│   │   ├── commons.py              # Shared CLI helpers (console, formatters)
+│   │   ├── ask_commands.py         # `vpp-rag ask`
+│   │   ├── health_commands.py      # `vpp-rag health`
+│   │   └── index_commands.py       # `vpp-rag index`
+│   ├── models/
+│   │   └── internals.py            # Pydantic / dataclass models
+│   ├── service/
+│   │   ├── agent.py                # LangGraph state machine (VppAgent)
+│   │   └── rag.py                  # Chroma-backed RAG over PDFs
 │   └── utils/
-│       ├── console.py         # Shared Rich console
-│       └── exceptions.py      # Domain exceptions
-├── tests/                     # pytest suite
-├── data/pdfs/                 # ENTSO-E regulation PDFs (git-ignored)
-├── .chroma_db/                # Persisted vector store (git-ignored)
-├── pyproject.toml             # Project metadata + tool config
-├── uv.lock                    # Locked dependency graph
-├── .python-version            # Pinned Python version (uv)
-├── .pre-commit-config.yaml    # flake8 / black / mypy / whitespace hooks
-├── .flake8                    # flake8 config (separate; no pyproject support)
+│       ├── console.py              # Shared Rich console
+│       └── exceptions.py           # Domain exceptions
+├── tests/
+│   └── clients/                    # Mirrors src/clients/
+├── data/pdfs/                      # ENTSO-E regulation PDFs (git-ignored)
+├── .chroma_db/                     # Persisted vector store (git-ignored)
+├── pyproject.toml                  # Project metadata + tool config
+├── uv.lock                         # Locked dependency graph
+├── .python-version                 # Pinned Python version (uv)
+├── .pre-commit-config.yaml         # flake8 / black / mypy / whitespace hooks
+├── .flake8                         # flake8 config (separate; no pyproject support)
 ├── README.md
 └── .env.example
 ```
