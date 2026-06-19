@@ -75,3 +75,4 @@ dmypy.json
 .chroma_db/
 data/pdfs/
 .claude
+.cursor
