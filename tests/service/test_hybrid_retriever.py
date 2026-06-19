@@ -18,7 +18,9 @@ from src.service.retriever_config import (
 
 class TestReciprocalRankFusion:
     def test_promotes_docs_present_in_both_lists(self):
-        shared = Document(page_content="fcr rules", metadata={"source": "a.pdf", "page": 1})
+        shared = Document(
+            page_content="fcr rules", metadata={"source": "a.pdf", "page": 1}
+        )
         only_vector = Document(
             page_content="other", metadata={"source": "b.pdf", "page": 2}
         )
@@ -47,7 +49,11 @@ class TestEntityBoostRetriever:
                     ),
                     Document(
                         page_content="fcr detail",
-                        metadata={"source": "b.pdf", "page": 2, "entities": "FCR,SO GL"},
+                        metadata={
+                            "source": "b.pdf",
+                            "page": 2,
+                            "entities": "FCR,SO GL",
+                        },
                     ),
                 ]
 

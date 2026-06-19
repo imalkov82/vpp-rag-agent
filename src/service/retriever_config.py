@@ -19,7 +19,8 @@ VALID_RETRIEVER_MODES = {
 
 def get_retriever_mode(mode: str | None = None) -> str:
     """Resolve retriever mode from argument or VPP_RETRIEVER env."""
-    resolved = (mode or os.getenv("VPP_RETRIEVER", RETRIEVER_VECTOR)).lower()
+    raw = mode or os.getenv("VPP_RETRIEVER") or RETRIEVER_VECTOR
+    resolved = raw.lower()
     if resolved not in VALID_RETRIEVER_MODES:
         return RETRIEVER_VECTOR
     return resolved
