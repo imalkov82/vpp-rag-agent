@@ -60,6 +60,8 @@ A LangGraph-powered agent for electricity price forecasting and grid regulation 
 | LLM | Ollama (`deepseek-r1:8b`, local) |
 | Embeddings | Ollama (`nomic-embed-text`, local) |
 | Vector Store | ChromaDB (persisted in `.chroma_db/`) |
+| Knowledge Graph | NetworkX + GraphML (persisted in `.graph_db/`) |
+| Tools & Retrieval | LangChain `@tool`, `as_retriever()`, LCEL |
 | PDF Processing | pypdf |
 | API Client | requests + lxml |
 | Validation | Pydantic |
@@ -108,6 +110,12 @@ to create a venv manually — `uv sync` handles it.
    # Build (or rebuild) the vector store from data/pdfs/:
    uv run vpp-rag index --rebuild
 
+   # Build vector store and regulation knowledge graph:
+   uv run vpp-rag index --with-graph
+
+   # Inspect graph neighborhoods for a query:
+   uv run vpp-rag graph query "FCR Germany"
+
    # Check Ollama, ENTSO-E key, vector store, and PDF corpus:
    uv run vpp-rag health
    ```
@@ -149,25 +157,40 @@ uv lock
 
 ## Project Structure
 
+The codebase is organized by concern: external API calls live in `clients/`,
+CLI surface in `cli.py` + `cmd/`, business logic in `service/`, and shared
+data classes in `models/internals.py`.
+
 ```
 vpp-rag-agent/
 ├── src/
-│   ├── __main__.py            # Click group: ask / health / index
-│   ├── health.py              # External-dependency health checks
-│   ├── agent/graph.py         # LangGraph state machine
-│   ├── entsoe/client.py       # ENTSO-E API client
-│   ├── rag/vectorstore.py     # Chroma-backed RAG over PDFs
+│   ├── cli.py                      # Click group; wires up subcommands
+│   ├── health.py                   # External-dependency health checks
+│   ├── clients/
+│   │   └── entsoe_client.py        # ENTSO-E Transparency Platform client
+│   ├── cmd/
+│   │   ├── commons.py              # Shared CLI helpers (console, formatters)
+│   │   ├── ask_commands.py         # `vpp-rag ask`
+│   │   ├── health_commands.py      # `vpp-rag health`
+│   │   └── index_commands.py       # `vpp-rag index`
+│   ├── models/
+│   │   └── internals.py            # Pydantic / dataclass models
+│   ├── service/
+│   │   ├── agent.py                # LangGraph state machine (VppAgent)
+│   │   ├── rag.py                  # Chroma-backed RAG over PDFs
+│   │   └── tools.py                # LangChain @tool wrappers
 │   └── utils/
-│       ├── console.py         # Shared Rich console
-│       └── exceptions.py      # Domain exceptions
-├── tests/                     # pytest suite
-├── data/pdfs/                 # ENTSO-E regulation PDFs (git-ignored)
-├── .chroma_db/                # Persisted vector store (git-ignored)
-├── pyproject.toml             # Project metadata + tool config
-├── uv.lock                    # Locked dependency graph
-├── .python-version            # Pinned Python version (uv)
-├── .pre-commit-config.yaml    # flake8 / black / mypy / whitespace hooks
-├── .flake8                    # flake8 config (separate; no pyproject support)
+│       ├── console.py              # Shared Rich console
+│       └── exceptions.py           # Domain exceptions
+├── tests/
+│   └── clients/                    # Mirrors src/clients/
+├── data/pdfs/                      # ENTSO-E regulation PDFs (git-ignored)
+├── .chroma_db/                     # Persisted vector store (git-ignored)
+├── pyproject.toml                  # Project metadata + tool config
+├── uv.lock                         # Locked dependency graph
+├── .python-version                 # Pinned Python version (uv)
+├── .pre-commit-config.yaml         # flake8 / black / mypy / whitespace hooks
+├── .flake8                         # flake8 config (separate; no pyproject support)
 ├── README.md
 └── .env.example
 ```
@@ -201,8 +224,9 @@ Common ENTSO-E bidding zones:
 This project demonstrates:
 
 1. **Real-time data integration** - Pulling live electricity prices from ENTSO-E API
-2. **RAG over domain documents** - Searching ENTSO-E grid regulations
-3. **LangGraph orchestration** - Stateful multi-tool agent with routing logic
-4. **Energy domain expertise** - Understanding bidding zones, price types, grid codes
+2. **RAG over domain documents** - Searching ENTSO-E grid regulations via LangChain retriever + LCEL
+3. **LangGraph orchestration** - Stateful multi-tool agent with LLM-based routing
+4. **LangChain tools** - `@tool` wrappers for prices and regulation search
+5. **Energy domain expertise** - Understanding bidding zones, price types, grid codes
 
-The stack (LangGraph + ChromaDB + local Ollama models) is exactly what companies look for in ML/AI engineering roles.
+The stack (LangGraph + LangChain + ChromaDB + local Ollama models) is exactly what companies look for in ML/AI engineering roles.

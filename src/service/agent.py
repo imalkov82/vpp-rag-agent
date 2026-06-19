@@ -1,46 +1,32 @@
 """LangGraph agent for electricity price and grid regulation Q&A"""
 
+import json
+
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_ollama import ChatOllama
 from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
-from src.clients.entsoe_client import get_default_client
 from src.models.internals import (
     AgentInput,
     AgentOutput,
     AgentState,
+    QueryClassification,
     QueryType,
 )
-from src.service.rag import get_default_rag
+from src.service.graph_search import get_graph_context
+from src.service.tools import VPP_TOOLS, get_electricity_prices, search_regulations
 
 load_dotenv()
 
-
-PRICE_KEYWORDS = {"price", "prices", "cost", "spot", "eur", "euro", "mwh", "kwh"}
-REGULATION_KEYWORDS = {
-    "regulation",
-    "regulations",
-    "rule",
-    "rules",
-    "policy",
-    "policies",
-    "grid",
-    "code",
-    "codes",
-    "balancing",
-    "reserve",
-    "capacity",
-    "entsoe",
-}
-
-
-def _tokenize(text: str) -> set[str]:
-    return set(
-        word
-        for word in "".join(c.lower() if c.isalnum() else " " for c in text).split()
-    )
+CLASSIFY_SYSTEM_PROMPT = (
+    "Classify the user query for a European electricity market assistant. "
+    "Use 'price' for electricity price or cost questions, 'regulation' for "
+    "grid codes, balancing, reserves, or policy questions, 'both' when the "
+    "query clearly needs live prices and regulation documents, and 'unknown' "
+    "for general questions that do not need either data source."
+)
 
 
 class VppAgent:
@@ -57,21 +43,27 @@ class VppAgent:
             temperature=temperature,
             base_url=base_url,
         )
+        self.classifier = self.llm.with_structured_output(QueryClassification)
+        self.llm_with_tools = self.llm.bind_tools(VPP_TOOLS)
         self.graph = self._build_graph()
 
     def _classify_query(self, state: AgentState) -> AgentState:
-        """Classify the query type using whole-word token matching."""
-        tokens = _tokenize(state["messages"][-1].content)
-        has_price = bool(tokens & PRICE_KEYWORDS)
-        has_reg = bool(tokens & REGULATION_KEYWORDS)
-
-        if has_price and has_reg:
-            state["query_type"] = QueryType.BOTH
-        elif has_price:
-            state["query_type"] = QueryType.PRICE
-        elif has_reg:
-            state["query_type"] = QueryType.REGULATION
-        else:
+        """Classify query intent with structured LLM output."""
+        query = state["messages"][-1].content
+        try:
+            raw = self.classifier.invoke(
+                [
+                    SystemMessage(content=CLASSIFY_SYSTEM_PROMPT),
+                    HumanMessage(content=query),
+                ]
+            )
+            result = (
+                raw
+                if isinstance(raw, QueryClassification)
+                else QueryClassification.model_validate(raw)
+            )
+            state["query_type"] = result.query_type
+        except Exception:
             state["query_type"] = QueryType.UNKNOWN
 
         return state
@@ -86,30 +78,26 @@ class VppAgent:
         }.get(qt, "general")
 
     def _get_prices(self, state: AgentState) -> AgentState:
-        """Fetch electricity prices"""
+        """Fetch electricity prices via LangChain tool."""
         try:
             zone = state.get("bidding_zone", "10YDE-EL------O")
-            client = get_default_client()
-            data = client.get_day_ahead_prices(zone)
-
-            state["prices"] = {
-                "area": data.area,
-                "prices": [
-                    {"timestamp": p.timestamp.isoformat(), "price": p.price}
-                    for p in data.prices
-                ],
-            }
+            raw = get_electricity_prices.invoke({"bidding_zone": zone})
+            state["prices"] = json.loads(raw)
         except Exception as e:
             state["error"] = f"price fetch failed: {e}"
 
         return state
 
     def _search_regs(self, state: AgentState) -> AgentState:
-        """Search regulations"""
+        """Search regulations via vector retriever and knowledge graph."""
         try:
             query = state["messages"][-1].content
-            rag = get_default_rag()
-            state["regulation_context"] = rag.get_context(query, k=3)
+            vector_context = search_regulations.invoke({"query": query, "k": 3})
+            graph_context = get_graph_context(query)
+            parts = [vector_context]
+            if graph_context:
+                parts.append(graph_context)
+            state["regulation_context"] = "\n\n".join(parts)
         except Exception as e:
             state["error"] = f"regulation search failed: {e}"
 
@@ -126,7 +114,7 @@ class VppAgent:
         return state
 
     def _generate_answer(self, state: AgentState) -> AgentState:
-        """Generate final answer using LLM"""
+        """Generate final answer using LLM with tools bound."""
         query = state["messages"][-1].content
 
         system_msg = SystemMessage(
@@ -162,7 +150,9 @@ class VppAgent:
         else:
             prompt = query
 
-        response = self.llm.invoke([system_msg, HumanMessage(content=prompt)])
+        response = self.llm_with_tools.invoke(
+            [system_msg, HumanMessage(content=prompt)]
+        )
         content = response.content
         state["final_answer"] = content if isinstance(content, str) else str(content)
         return state

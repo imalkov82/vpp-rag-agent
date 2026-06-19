@@ -32,6 +32,11 @@ DEFAULT_ZONE = os.getenv("DEFAULT_AREA", "10YDE-EL------O")
     is_flag=True,
     help="Wipe and rebuild the vector store from data/pdfs/.",
 )
+@click.option(
+    "--with-graph",
+    is_flag=True,
+    help="Also build the regulation knowledge graph when indexing.",
+)
 @click.pass_context
 def ask_command(
     ctx: click.Context,
@@ -39,6 +44,7 @@ def ask_command(
     zone: str,
     no_index: bool,
     rebuild_index: bool,
+    with_graph: bool,
 ) -> None:
     """Ask the agent a question (price / regulation / both)."""
     try:
@@ -54,6 +60,18 @@ def ask_command(
                 )
             else:
                 console.print(f"Vector store ready ({count} chunks).", style="dim")
+
+            if with_graph:
+                from src.service.graph_ingest import index_graph
+
+                node_count = index_graph(
+                    force_rebuild=rebuild_index, use_llm=False, rag=rag
+                )
+                if node_count:
+                    console.print(
+                        f"Knowledge graph ready ({node_count} nodes).",
+                        style="dim",
+                    )
 
         agent = VppAgent()
         result = agent.run(AgentInput(query=query, bidding_zone=zone))
