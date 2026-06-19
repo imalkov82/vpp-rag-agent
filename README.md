@@ -60,6 +60,7 @@ A LangGraph-powered agent for electricity price forecasting and grid regulation 
 | LLM | Ollama (`deepseek-r1:8b`, local) |
 | Embeddings | Ollama (`nomic-embed-text`, local) |
 | Vector Store | ChromaDB (persisted in `.chroma_db/`) |
+| Tools & Retrieval | LangChain `@tool`, `as_retriever()`, LCEL |
 | PDF Processing | pypdf |
 | API Client | requests + lxml |
 | Validation | Pydantic |
@@ -169,7 +170,8 @@ vpp-rag-agent/
 │   │   └── internals.py            # Pydantic / dataclass models
 │   ├── service/
 │   │   ├── agent.py                # LangGraph state machine (VppAgent)
-│   │   └── rag.py                  # Chroma-backed RAG over PDFs
+│   │   ├── rag.py                  # Chroma-backed RAG over PDFs
+│   │   └── tools.py                # LangChain @tool wrappers
 │   └── utils/
 │       ├── console.py              # Shared Rich console
 │       └── exceptions.py           # Domain exceptions
@@ -215,8 +217,9 @@ Common ENTSO-E bidding zones:
 This project demonstrates:
 
 1. **Real-time data integration** - Pulling live electricity prices from ENTSO-E API
-2. **RAG over domain documents** - Searching ENTSO-E grid regulations
-3. **LangGraph orchestration** - Stateful multi-tool agent with routing logic
-4. **Energy domain expertise** - Understanding bidding zones, price types, grid codes
+2. **RAG over domain documents** - Searching ENTSO-E grid regulations via LangChain retriever + LCEL
+3. **LangGraph orchestration** - Stateful multi-tool agent with LLM-based routing
+4. **LangChain tools** - `@tool` wrappers for prices and regulation search
+5. **Energy domain expertise** - Understanding bidding zones, price types, grid codes
 
-The stack (LangGraph + ChromaDB + local Ollama models) is exactly what companies look for in ML/AI engineering roles.
+The stack (LangGraph + LangChain + ChromaDB + local Ollama models) is exactly what companies look for in ML/AI engineering roles.
