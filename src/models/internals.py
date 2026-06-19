@@ -17,6 +17,13 @@ class QueryType(str, Enum):
     UNKNOWN = "unknown"
 
 
+class QueryClassification(BaseModel):
+    """LLM-structured query intent for routing."""
+
+    query_type: QueryType
+    reasoning: str = ""
+
+
 class AgentState(TypedDict):
     """State of the agent"""
 

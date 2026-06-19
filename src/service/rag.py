@@ -8,6 +8,8 @@ from typing import List
 from dotenv import load_dotenv
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
+from langchain_core.retrievers import BaseRetriever
+from langchain_core.runnables import RunnableLambda
 from langchain_ollama import OllamaEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from pypdf import PdfReader
@@ -26,6 +28,15 @@ def _chunk_id(source: str, page: int, content: str) -> str:
     h.update(b"\0")
     h.update(content.encode())
     return h.hexdigest()[:16]
+
+
+def _format_docs(docs: List[Document]) -> str:
+    """Format retrieved documents for LLM context."""
+    return "\n\n".join(
+        f"[Source: {doc.metadata.get('source', 'unknown')} "
+        f"p.{doc.metadata.get('page', 0)}]\n{doc.page_content}"
+        for doc in docs
+    )
 
 
 class EntsoeRagSystem:
@@ -53,6 +64,14 @@ class EntsoeRagSystem:
             chunk_overlap=200,
             separators=["\n\n", "\n", ". "],
         )
+
+    def get_retriever(self, k: int = 4) -> BaseRetriever:
+        """Return a LangChain retriever over the regulation vector store."""
+        return self.vectorstore.as_retriever(search_kwargs={"k": k})
+
+    def get_retrieval_chain(self, k: int = 4):
+        """LCEL chain: query -> retriever -> formatted context string."""
+        return self.get_retriever(k=k) | RunnableLambda(_format_docs)
 
     def load_pdf(self, file_path: Path) -> List[Document]:
         """Load and chunk a PDF file"""
@@ -143,11 +162,16 @@ class EntsoeRagSystem:
         return chunks
 
     def get_context(self, query: str, k: int = 4) -> str:
-        """Get formatted context string for LLM"""
+        """Get formatted context string for LLM (direct similarity search)."""
         chunks = self.search(query, k=k)
         return "\n\n".join(
             f"[Source: {c.source} p.{c.page}]\n{c.content}" for c in chunks
         )
+
+    def get_context_via_retriever(self, query: str, k: int = 4) -> str:
+        """Get formatted context via LangChain retriever + LCEL chain."""
+        chain = self.get_retrieval_chain(k=k)
+        return chain.invoke(query)
 
 
 def get_default_rag() -> EntsoeRagSystem:
