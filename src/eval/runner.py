@@ -30,12 +30,13 @@ def run_eval(
     agent: VppAgent | None = None,
     judge: LLMJudge | None = None,
     run_agent: bool = True,
+    retriever_mode: str | None = None,
 ) -> EvalReport:
     """Evaluate retrieval and optionally full agent answers on gold cases."""
     if retriever is None:
         from src.service.rag import get_default_rag
 
-        retriever = get_default_rag().get_retriever(k=k)
+        retriever = get_default_rag().get_retriever(k=k, mode=retriever_mode)
 
     if run_agent and agent is None:
         from src.service.agent import get_default_agent

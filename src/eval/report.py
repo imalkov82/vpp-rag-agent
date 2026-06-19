@@ -39,9 +39,7 @@ class EvalReport(BaseModel):
     mean_answer_contains: float | None = None
     p95_latency_ms: float
     results: list[CaseResult]
-    generated_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc)
-    )
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 def _mean(values: list[float | None]) -> float | None:
@@ -71,8 +69,7 @@ def aggregate_results(
         case_count=len(results),
         mean_recall_at_k=sum(r.recall_at_k for r in results) / len(results),
         mean_mrr=sum(r.mrr for r in results) / len(results),
-        mean_context_precision=sum(r.context_precision for r in results)
-        / len(results),
+        mean_context_precision=sum(r.context_precision for r in results) / len(results),
         mean_faithfulness=_mean([r.faithfulness for r in results]),
         mean_answer_contains=_mean([r.answer_contains for r in results]),
         p95_latency_ms=_p95([r.latency_ms for r in results]),
@@ -119,9 +116,7 @@ def render_markdown(report: EvalReport) -> str:
 
     for result in report.results:
         faith = (
-            f"{result.faithfulness:.2f}"
-            if result.faithfulness is not None
-            else "n/a"
+            f"{result.faithfulness:.2f}" if result.faithfulness is not None else "n/a"
         )
         answer = (
             f"{result.answer_contains:.2f}"
