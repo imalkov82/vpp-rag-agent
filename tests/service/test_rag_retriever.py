@@ -46,5 +46,5 @@ class TestEntsoeRagRetriever:
         result = rag.get_context_via_retriever("FCR", k=2)
 
         assert "content" in result
-        rag.get_retrieval_chain.assert_called_once_with(k=2)
+        rag.get_retrieval_chain.assert_called_once_with(k=2, mode="vector")
         mock_chain.invoke.assert_called_once_with("FCR")
