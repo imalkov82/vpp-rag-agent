@@ -111,6 +111,10 @@ to create a venv manually — `uv sync` handles it.
 
    # Check Ollama, ENTSO-E key, vector store, and PDF corpus:
    uv run vpp-rag health
+
+   # Run the hand-curated regulation eval baseline:
+   uv run vpp-rag eval run --retrieval-only
+   uv run vpp-rag eval run --no-judge
    ```
 
 ## Development
@@ -223,3 +227,20 @@ This project demonstrates:
 5. **Energy domain expertise** - Understanding bidding zones, price types, grid codes
 
 The stack (LangGraph + LangChain + ChromaDB + local Ollama models) is exactly what companies look for in ML/AI engineering roles.
+
+## Evaluation
+
+The gold eval set in `tests/eval/regulation_eval_set.jsonl` is **hand-curated** (not LLM-synthesized). It measures retrieval recall@k, MRR, context precision, and optional LLM faithfulness judging.
+
+```bash
+# Retrieval-only baseline (fast; no agent/LLM judge):
+uv run vpp-rag eval run --retrieval-only
+
+# Full agent run without faithfulness judge:
+uv run vpp-rag eval run --no-judge
+
+# Upload dataset + summary to LangSmith (requires LANGSMITH_API_KEY):
+uv run vpp-rag eval run --upload
+```
+
+Results are written to `docs/eval_report.md` with a baseline summary row for comparing future GraphRAG improvements.
