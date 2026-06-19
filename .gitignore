@@ -73,6 +73,7 @@ dmypy.json
 
 # Project-specific
 .chroma_db/
+.graph_db/
 data/pdfs/
 .claude
 .cursor
