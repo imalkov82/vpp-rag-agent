@@ -76,3 +76,4 @@ dmypy.json
 data/pdfs/
 .claude
 .cursor
+docs/roadmap.md
