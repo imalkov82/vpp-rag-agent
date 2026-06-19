@@ -75,3 +75,5 @@ dmypy.json
 .chroma_db/
 data/pdfs/
 .claude
+.cursor
+docs/roadmap.md
