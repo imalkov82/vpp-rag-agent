@@ -15,6 +15,8 @@ class EvalCase(BaseModel):
     expected_pages: list[int] = Field(default_factory=list)
     answer_must_contain: list[str] = Field(default_factory=list)
     category: str = "regulation"
+    follow_up: str | None = None
+    follow_up_must_contain: list[str] = Field(default_factory=list)
 
 
 DEFAULT_EVAL_SET = Path("tests/eval/regulation_eval_set.jsonl")

@@ -57,6 +57,11 @@ def eval_group() -> None:
     type=click.Choice(["vector", "hybrid", "entity", "graph"]),
     help="Retriever mode (defaults to VPP_RETRIEVER or vector).",
 )
+@click.option(
+    "--multiturn",
+    is_flag=True,
+    help="Run follow-up turns with checkpointed thread ids (requires follow_up in dataset).",
+)
 def eval_run_command(
     dataset_path: Path,
     k: int,
@@ -65,6 +70,7 @@ def eval_run_command(
     retrieval_only: bool,
     report: Path,
     retriever_mode: str | None,
+    multiturn: bool,
 ) -> None:
     """Run the gold eval set and write docs/eval_report.md."""
     from src.service.rag import get_default_rag
@@ -97,6 +103,7 @@ def eval_run_command(
         judge=judge,
         run_agent=not retrieval_only,
         retriever_mode=mode,
+        multiturn=multiturn,
     )
 
     out = write_report(eval_report, report)

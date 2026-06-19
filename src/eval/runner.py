@@ -31,6 +31,7 @@ def run_eval(
     judge: LLMJudge | None = None,
     run_agent: bool = True,
     retriever_mode: str | None = None,
+    multiturn: bool = False,
 ) -> EvalReport:
     """Evaluate retrieval and optionally full agent answers on gold cases."""
     if retriever is None:
@@ -39,9 +40,11 @@ def run_eval(
         retriever = get_default_rag().get_retriever(k=k, mode=retriever_mode)
 
     if run_agent and agent is None:
-        from src.service.agent import get_default_agent
+        from langgraph.checkpoint.memory import MemorySaver
 
-        agent = get_default_agent()
+        from src.service.agent import VppAgent
+
+        agent = VppAgent(checkpointer=MemorySaver())
 
     results: list[CaseResult] = []
 
@@ -54,12 +57,20 @@ def run_eval(
         latency_ms = (time.perf_counter() - start) * 1000
 
         if run_agent and agent is not None:
-            output = agent.run(AgentInput(query=case.question))
-            latency_ms = (time.perf_counter() - start) * 1000
+            if multiturn and case.follow_up:
+                thread_id = f"eval-{case.id}"
+                agent.run(AgentInput(query=case.question), thread_id=thread_id)
+                output = agent.run(
+                    AgentInput(query=case.follow_up),
+                    thread_id=thread_id,
+                )
+                required = case.follow_up_must_contain or case.answer_must_contain
+            else:
+                output = agent.run(AgentInput(query=case.question))
+                required = case.answer_must_contain
 
-            answer_score = answer_contains_score(
-                output.answer, case.answer_must_contain
-            )
+            latency_ms = (time.perf_counter() - start) * 1000
+            answer_score = answer_contains_score(output.answer, required)
 
             context = ""
             for source in output.sources:
