@@ -15,6 +15,7 @@ from src.models.internals import (
     QueryClassification,
     QueryType,
 )
+from src.service.graph_search import get_graph_context
 from src.service.tools import VPP_TOOLS, get_electricity_prices, search_regulations
 
 load_dotenv()
@@ -88,12 +89,15 @@ class VppAgent:
         return state
 
     def _search_regs(self, state: AgentState) -> AgentState:
-        """Search regulations via LangChain tool + retriever chain."""
+        """Search regulations via vector retriever and knowledge graph."""
         try:
             query = state["messages"][-1].content
-            state["regulation_context"] = search_regulations.invoke(
-                {"query": query, "k": 3}
-            )
+            vector_context = search_regulations.invoke({"query": query, "k": 3})
+            graph_context = get_graph_context(query)
+            parts = [vector_context]
+            if graph_context:
+                parts.append(graph_context)
+            state["regulation_context"] = "\n\n".join(parts)
         except Exception as e:
             state["error"] = f"regulation search failed: {e}"
 

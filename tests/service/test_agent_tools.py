@@ -116,12 +116,16 @@ class TestVppAgentRouting:
         mock_tool.invoke.assert_called_once_with({"bidding_zone": "10YDE-EL------O"})
 
     @patch("src.service.agent.search_regulations")
-    def test_search_regs_uses_tool(self, mock_tool):
+    @patch("src.service.agent.get_graph_context")
+    def test_search_regs_uses_tool_and_graph(self, mock_graph, mock_tool):
         agent = self._make_agent()
-        mock_tool.invoke.return_value = "regulation context"
+        mock_tool.invoke.return_value = "vector context"
+        mock_graph.return_value = "graph context"
 
         state = {"messages": [MagicMock(content="balancing rules")], "error": None}
         result = agent._search_regs(state)
 
-        assert result["regulation_context"] == "regulation context"
+        assert "vector context" in result["regulation_context"]
+        assert "graph context" in result["regulation_context"]
         mock_tool.invoke.assert_called_once_with({"query": "balancing rules", "k": 3})
+        mock_graph.assert_called_once_with("balancing rules")

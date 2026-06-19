@@ -60,6 +60,7 @@ A LangGraph-powered agent for electricity price forecasting and grid regulation 
 | LLM | Ollama (`deepseek-r1:8b`, local) |
 | Embeddings | Ollama (`nomic-embed-text`, local) |
 | Vector Store | ChromaDB (persisted in `.chroma_db/`) |
+| Knowledge Graph | NetworkX + GraphML (persisted in `.graph_db/`) |
 | Tools & Retrieval | LangChain `@tool`, `as_retriever()`, LCEL |
 | PDF Processing | pypdf |
 | API Client | requests + lxml |
@@ -108,6 +109,12 @@ to create a venv manually — `uv sync` handles it.
 
    # Build (or rebuild) the vector store from data/pdfs/:
    uv run vpp-rag index --rebuild
+
+   # Build vector store and regulation knowledge graph:
+   uv run vpp-rag index --with-graph
+
+   # Inspect graph neighborhoods for a query:
+   uv run vpp-rag graph query "FCR Germany"
 
    # Check Ollama, ENTSO-E key, vector store, and PDF corpus:
    uv run vpp-rag health
