@@ -50,6 +50,13 @@ def eval_group() -> None:
     type=click.Path(path_type=Path),
     help="Where to write the markdown report.",
 )
+@click.option(
+    "--retriever",
+    "retriever_mode",
+    default=None,
+    type=click.Choice(["vector", "hybrid", "entity", "graph"]),
+    help="Retriever mode (defaults to VPP_RETRIEVER or vector).",
+)
 def eval_run_command(
     dataset_path: Path,
     k: int,
@@ -57,6 +64,7 @@ def eval_run_command(
     no_judge: bool,
     retrieval_only: bool,
     report: Path,
+    retriever_mode: str | None,
 ) -> None:
     """Run the gold eval set and write docs/eval_report.md."""
     from src.service.rag import get_default_rag
@@ -68,6 +76,12 @@ def eval_run_command(
             style="red",
         )
         raise SystemExit(1)
+
+    from src.service.retriever_config import get_retriever_mode
+
+    mode = get_retriever_mode(retriever_mode)
+    if label == "baseline-vector" and mode != "vector":
+        label = f"baseline-{mode}"
 
     cases = load_eval_set(dataset_path)
     judge = None if no_judge or retrieval_only else LLMJudge()
@@ -82,6 +96,7 @@ def eval_run_command(
         label=label,
         judge=judge,
         run_agent=not retrieval_only,
+        retriever_mode=mode,
     )
 
     out = write_report(eval_report, report)

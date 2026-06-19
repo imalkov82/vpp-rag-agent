@@ -237,3 +237,24 @@ uv run vpp-rag eval run --no-judge
 ```
 
 Results are written to `docs/eval_report.md` with a baseline summary row for comparing future GraphRAG improvements.
+
+### GraphRAG retriever modes
+
+Set `VPP_RETRIEVER` or pass `--retriever` to `eval run`:
+
+| Mode | Description |
+|------|-------------|
+| `vector` | Chroma similarity only (Phase 2.5 baseline) |
+| `hybrid` | BM25 + vector with reciprocal rank fusion |
+| `entity` | Hybrid + entity-tag boost from graph ingest |
+| `graph` | Entity boost + Louvain community summaries |
+
+```bash
+# Compare retrieval modes on the gold set:
+uv run vpp-rag eval run --retrieval-only --retriever vector --label baseline-vector
+uv run vpp-rag eval run --retrieval-only --retriever hybrid --label baseline-hybrid
+uv run vpp-rag eval run --retrieval-only --retriever entity --label baseline-entity
+uv run vpp-rag eval run --retrieval-only --retriever graph --label baseline-graph
+```
+
+Build the knowledge graph first: `uv run vpp-rag index --with-graph`
