@@ -33,6 +33,7 @@ class AgentState(TypedDict):
     regulation_context: Optional[str]
     final_answer: Optional[str]
     error: Optional[str]
+    degraded: bool
     bidding_zone: str
 
 

@@ -91,8 +91,8 @@ class TestVppAgentRouting:
     @pytest.mark.parametrize(
         ("query_type", "expected_route"),
         [
-            (QueryType.PRICE, "get_prices"),
-            (QueryType.REGULATION, "search_regs"),
+            (QueryType.PRICE, "price_subgraph"),
+            (QueryType.REGULATION, "regulation_subgraph"),
             (QueryType.BOTH, "get_both"),
             (QueryType.UNKNOWN, "general"),
         ],

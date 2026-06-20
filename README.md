@@ -258,3 +258,25 @@ uv run vpp-rag eval run --retrieval-only --retriever graph --label baseline-grap
 ```
 
 Build the knowledge graph first: `uv run vpp-rag index --with-graph`
+
+## Agent maturity (Phase 4)
+
+Multi-turn conversations use Sqlite checkpoints in `.agent_db/`:
+
+```bash
+# Continue a conversation thread:
+uv run vpp-rag ask "What is FCR?" --thread demo-1 --no-index
+uv run vpp-rag ask "How does it relate to SO GL?" --thread demo-1 --no-index
+
+# Stream tokens live:
+uv run vpp-rag ask "FCR requirements" --stream --no-index
+
+# ReAct tool-loop mode:
+uv run vpp-rag ask "Price in Germany and FCR rules" --react --no-index
+```
+
+Multiturn eval cases live in `tests/eval/multiturn_eval_set.jsonl`:
+
+```bash
+uv run vpp-rag eval run --multiturn --dataset tests/eval/multiturn_eval_set.jsonl --no-judge
+```
