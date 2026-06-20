@@ -26,7 +26,7 @@ from src.models.internals import (
 from src.service.checkpoints import get_checkpointer
 from src.service.react_agent import build_react_graph, extract_react_answer
 from src.service.subgraphs import build_price_subgraph, build_regulation_subgraph
-from src.service.tools import VPP_TOOLS, get_electricity_prices, search_regulations
+from src.service.tools import get_electricity_prices, search_regulations
 
 load_dotenv()
 
@@ -69,7 +69,6 @@ class VppAgent:
             base_url=base_url,
         )
         self.classifier = self.llm.with_structured_output(QueryClassification)
-        self.llm_with_tools = self.llm.bind_tools(VPP_TOOLS)
         self.use_react = use_react
         self.checkpointer = (
             checkpointer if checkpointer is not None else get_checkpointer()
@@ -83,6 +82,17 @@ class VppAgent:
         if not thread_id:
             return cast(RunnableConfig, {})
         return cast(RunnableConfig, {"configurable": {"thread_id": thread_id}})
+
+    def _parse_query_type(self, raw: str | QueryType | None) -> QueryType:
+        """Normalize checkpoint-safe query_type strings back to enum."""
+        if raw is None:
+            return QueryType.UNKNOWN
+        if isinstance(raw, QueryType):
+            return raw
+        try:
+            return QueryType(raw)
+        except ValueError:
+            return QueryType.UNKNOWN
 
     def _classify_query(self, state: AgentState) -> AgentState:
         """Classify query intent with structured LLM output."""
@@ -99,15 +109,15 @@ class VppAgent:
                 if isinstance(raw, QueryClassification)
                 else QueryClassification.model_validate(raw)
             )
-            state["query_type"] = result.query_type
+            state["query_type"] = result.query_type.value
         except Exception:
-            state["query_type"] = QueryType.UNKNOWN
+            state["query_type"] = QueryType.UNKNOWN.value
 
         return state
 
     def _route_query(self, state: AgentState) -> str:
         """Route to appropriate handler."""
-        qt = state.get("query_type") or QueryType.UNKNOWN
+        qt = self._parse_query_type(state.get("query_type"))
         return {
             QueryType.PRICE: "price_subgraph",
             QueryType.REGULATION: "regulation_subgraph",
@@ -182,7 +192,7 @@ class VppAgent:
         return query
 
     def _generate_answer(self, state: AgentState) -> AgentState:
-        """Generate final answer using LLM with tools bound."""
+        """Generate final answer from retrieved context (tools already ran upstream)."""
         prompt = self._build_answer_prompt(state)
         system_msg = SystemMessage(content=ANSWER_SYSTEM_PROMPT)
 
@@ -197,9 +207,7 @@ class VppAgent:
             )
             return state
 
-        response = self.llm_with_tools.invoke(
-            [system_msg, HumanMessage(content=prompt)]
-        )
+        response = self.llm.invoke([system_msg, HumanMessage(content=prompt)])
         content = response.content
         answer = content if isinstance(content, str) else str(content)
 

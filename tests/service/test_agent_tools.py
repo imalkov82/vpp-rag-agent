@@ -57,7 +57,7 @@ class TestVppAgentRouting:
     def _make_agent(self):
         agent = VppAgent()
         agent.classifier = MagicMock()
-        agent.llm_with_tools = MagicMock()
+        agent.llm = MagicMock()
         agent.graph = MagicMock()
         return agent
 
@@ -74,7 +74,7 @@ class TestVppAgentRouting:
         }
         result = agent._classify_query(state)
 
-        assert result["query_type"] == QueryType.REGULATION
+        assert result["query_type"] == QueryType.REGULATION.value
 
     def test_classify_query_fallback_on_error(self):
         agent = self._make_agent()
@@ -86,7 +86,7 @@ class TestVppAgentRouting:
         }
         result = agent._classify_query(state)
 
-        assert result["query_type"] == QueryType.UNKNOWN
+        assert result["query_type"] == QueryType.UNKNOWN.value
 
     @pytest.mark.parametrize(
         ("query_type", "expected_route"),

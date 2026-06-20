@@ -38,7 +38,7 @@ class TestAgentMaturity:
     @patch.object(VppAgent, "__init__", lambda self, *a, **kw: None)
     def _make_agent(self):
         agent = VppAgent()
-        agent.llm_with_tools = MagicMock()
+        agent.llm = MagicMock()
         return agent
 
     @patch("src.service.agent.get_electricity_prices")
@@ -95,8 +95,8 @@ class TestAgentMaturity:
             query_type=QueryType.UNKNOWN,
             reasoning="",
         )
-        agent.llm_with_tools = MagicMock()
-        agent.llm_with_tools.invoke.return_value = AIMessage(content="hello")
+        agent.llm = MagicMock()
+        agent.llm.invoke.return_value = AIMessage(content="hello")
         agent.use_react = False
         agent.checkpointer = MemorySaver()
         agent.graph = agent._build_graph()

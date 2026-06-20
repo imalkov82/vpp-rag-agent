@@ -28,7 +28,7 @@ class AgentState(TypedDict):
     """State of the agent"""
 
     messages: List
-    query_type: Optional[QueryType]
+    query_type: Optional[str]
     prices: Optional[dict]
     regulation_context: Optional[str]
     final_answer: Optional[str]

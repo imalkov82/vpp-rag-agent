@@ -20,10 +20,22 @@ def _ensure_index(no_index: bool, rebuild_index: bool) -> None:
     from src.service.rag import get_default_rag
 
     rag = get_default_rag()
+    if rag.is_indexed() and not rebuild_index:
+        return
+
+    pdfs = list(rag.pdf_dir.glob("*.pdf")) if rag.pdf_dir.exists() else []
+    if not pdfs:
+        console.print(
+            "Warning: data/pdfs/ has no PDFs — regulation search will be empty. "
+            "Add ENTSO-E PDFs and run: uv run vpp-rag index",
+            style="yellow",
+        )
+        return
+
     count = rag.index_documents(force_rebuild=rebuild_index)
     if count == 0:
         console.print(
-            "Warning: no PDF chunks indexed (place PDFs under data/pdfs/).",
+            "Warning: indexing produced 0 chunks.",
             style="yellow",
         )
     else:
@@ -96,6 +108,12 @@ def ask_command(
         _ensure_index(no_index, rebuild_index)
 
         agent = VppAgent(use_react=react)
+        if react:
+            console.print(
+                "Note: --react requires an Ollama model with tool support "
+                "(e.g. llama3.1, qwen2.5). deepseek-r1:8b does not support tools.",
+                style="dim",
+            )
         agent_input = AgentInput(query=query, bidding_zone=zone)
 
         if stream:
