@@ -60,7 +60,6 @@ A LangGraph-powered agent for electricity price forecasting and grid regulation 
 | LLM | Ollama (`deepseek-r1:8b`, local) |
 | Embeddings | Ollama (`nomic-embed-text`, local) |
 | Vector Store | ChromaDB (persisted in `.chroma_db/`) |
-| Knowledge Graph | NetworkX + GraphML (persisted in `.graph_db/`) |
 | Tools & Retrieval | LangChain `@tool`, `as_retriever()`, LCEL |
 | PDF Processing | pypdf |
 | API Client | requests + lxml |
@@ -109,12 +108,6 @@ to create a venv manually — `uv sync` handles it.
 
    # Build (or rebuild) the vector store from data/pdfs/:
    uv run vpp-rag index --rebuild
-
-   # Build vector store and regulation knowledge graph:
-   uv run vpp-rag index --with-graph
-
-   # Inspect graph neighborhoods for a query:
-   uv run vpp-rag graph query "FCR Germany"
 
    # Check Ollama, ENTSO-E key, vector store, and PDF corpus:
    uv run vpp-rag health
@@ -230,3 +223,60 @@ This project demonstrates:
 5. **Energy domain expertise** - Understanding bidding zones, price types, grid codes
 
 The stack (LangGraph + LangChain + ChromaDB + local Ollama models) is exactly what companies look for in ML/AI engineering roles.
+
+## Evaluation
+
+The gold eval set in `tests/eval/regulation_eval_set.jsonl` is **hand-curated** (not LLM-synthesized). It measures retrieval recall@k, MRR, context precision, and optional LLM faithfulness judging.
+
+```bash
+# Retrieval-only baseline (fast; no agent/LLM judge):
+uv run vpp-rag eval run --retrieval-only
+
+# Full agent run without faithfulness judge:
+uv run vpp-rag eval run --no-judge
+```
+
+Results are written to `docs/eval_report.md` with a baseline summary row for comparing future GraphRAG improvements.
+
+### GraphRAG retriever modes
+
+Set `VPP_RETRIEVER` or pass `--retriever` to `eval run`:
+
+| Mode | Description |
+|------|-------------|
+| `vector` | Chroma similarity only (Phase 2.5 baseline) |
+| `hybrid` | BM25 + vector with reciprocal rank fusion |
+| `entity` | Hybrid + entity-tag boost from graph ingest |
+| `graph` | Entity boost + Louvain community summaries |
+
+```bash
+# Compare retrieval modes on the gold set:
+uv run vpp-rag eval run --retrieval-only --retriever vector --label baseline-vector
+uv run vpp-rag eval run --retrieval-only --retriever hybrid --label baseline-hybrid
+uv run vpp-rag eval run --retrieval-only --retriever entity --label baseline-entity
+uv run vpp-rag eval run --retrieval-only --retriever graph --label baseline-graph
+```
+
+Build the knowledge graph first: `uv run vpp-rag index --with-graph`
+
+## Agent maturity (Phase 4)
+
+Multi-turn conversations use Sqlite checkpoints in `.agent_db/`:
+
+```bash
+# Continue a conversation thread:
+uv run vpp-rag ask "What is FCR?" --thread demo-1 --no-index
+uv run vpp-rag ask "How does it relate to SO GL?" --thread demo-1 --no-index
+
+# Stream tokens live:
+uv run vpp-rag ask "FCR requirements" --stream --no-index
+
+# ReAct tool-loop mode:
+uv run vpp-rag ask "Price in Germany and FCR rules" --react --no-index
+```
+
+Multiturn eval cases live in `tests/eval/multiturn_eval_set.jsonl`:
+
+```bash
+uv run vpp-rag eval run --multiturn --dataset tests/eval/multiturn_eval_set.jsonl --no-judge
+```

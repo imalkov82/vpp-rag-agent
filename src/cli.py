@@ -6,6 +6,7 @@ Electricity price and grid regulation Q&A system using LangGraph and RAG.
 import click
 
 from src.cmd.ask_commands import ask_command
+from src.cmd.eval_commands import eval_group
 from src.cmd.graph_commands import graph_group
 from src.cmd.health_commands import health_command
 from src.cmd.index_commands import index_command
@@ -19,6 +20,7 @@ def main() -> None:
 main.add_command(ask_command)
 main.add_command(health_command)
 main.add_command(index_command)
+main.add_command(eval_group)
 main.add_command(graph_group)
 
 

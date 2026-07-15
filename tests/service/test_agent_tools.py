@@ -57,7 +57,7 @@ class TestVppAgentRouting:
     def _make_agent(self):
         agent = VppAgent()
         agent.classifier = MagicMock()
-        agent.llm_with_tools = MagicMock()
+        agent.llm = MagicMock()
         agent.graph = MagicMock()
         return agent
 
@@ -74,7 +74,7 @@ class TestVppAgentRouting:
         }
         result = agent._classify_query(state)
 
-        assert result["query_type"] == QueryType.REGULATION
+        assert result["query_type"] == QueryType.REGULATION.value
 
     def test_classify_query_fallback_on_error(self):
         agent = self._make_agent()
@@ -86,13 +86,13 @@ class TestVppAgentRouting:
         }
         result = agent._classify_query(state)
 
-        assert result["query_type"] == QueryType.UNKNOWN
+        assert result["query_type"] == QueryType.UNKNOWN.value
 
     @pytest.mark.parametrize(
         ("query_type", "expected_route"),
         [
-            (QueryType.PRICE, "get_prices"),
-            (QueryType.REGULATION, "search_regs"),
+            (QueryType.PRICE, "price_subgraph"),
+            (QueryType.REGULATION, "regulation_subgraph"),
             (QueryType.BOTH, "get_both"),
             (QueryType.UNKNOWN, "general"),
         ],
@@ -116,16 +116,12 @@ class TestVppAgentRouting:
         mock_tool.invoke.assert_called_once_with({"bidding_zone": "10YDE-EL------O"})
 
     @patch("src.service.agent.search_regulations")
-    @patch("src.service.agent.get_graph_context")
-    def test_search_regs_uses_tool_and_graph(self, mock_graph, mock_tool):
+    def test_search_regs_uses_tool(self, mock_tool):
         agent = self._make_agent()
-        mock_tool.invoke.return_value = "vector context"
-        mock_graph.return_value = "graph context"
+        mock_tool.invoke.return_value = "regulation context"
 
         state = {"messages": [MagicMock(content="balancing rules")], "error": None}
         result = agent._search_regs(state)
 
-        assert "vector context" in result["regulation_context"]
-        assert "graph context" in result["regulation_context"]
+        assert result["regulation_context"] == "regulation context"
         mock_tool.invoke.assert_called_once_with({"query": "balancing rules", "k": 3})
-        mock_graph.assert_called_once_with("balancing rules")

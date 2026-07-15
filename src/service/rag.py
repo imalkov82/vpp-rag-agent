@@ -7,14 +7,39 @@ from typing import List
 
 from dotenv import load_dotenv
 from langchain_chroma import Chroma
+from langchain_core.callbacks import CallbackManagerForRetrieverRun
 from langchain_core.documents import Document
 from langchain_core.retrievers import BaseRetriever
 from langchain_core.runnables import RunnableLambda
 from langchain_ollama import OllamaEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from pydantic import ConfigDict
 from pypdf import PdfReader
 
 from src.models.internals import DocumentChunk
+from src.service.entity_tags import entity_names_for_chunk
+from src.service.graph_search import (
+    find_entities_in_query,
+    get_multi_hop_context,
+    load_community_summaries,
+    refresh_community_summaries,
+)
+from src.service.graph_store import load_graph_store
+from src.service.hybrid_retriever import (
+    EntityBoostRetriever,
+    GraphAugmentedRetriever,
+    HybridRetriever,
+    build_bm25_index,
+    load_bm25_corpus,
+    save_bm25_corpus,
+)
+from src.service.retriever_config import (
+    RETRIEVER_ENTITY,
+    RETRIEVER_GRAPH,
+    RETRIEVER_HYBRID,
+    RETRIEVER_VECTOR,
+    get_retriever_mode,
+)
 
 load_dotenv()
 
@@ -65,13 +90,62 @@ class EntsoeRagSystem:
             separators=["\n\n", "\n", ". "],
         )
 
-    def get_retriever(self, k: int = 4) -> BaseRetriever:
+    def get_vector_retriever(self, k: int = 4) -> BaseRetriever:
         """Return a LangChain retriever over the regulation vector store."""
         return self.vectorstore.as_retriever(search_kwargs={"k": k})
 
-    def get_retrieval_chain(self, k: int = 4):
+    def get_retriever(self, k: int = 4, mode: str | None = None) -> BaseRetriever:
+        """Return retriever for the requested GraphRAG mode."""
+        resolved = get_retriever_mode(mode)
+
+        if resolved == RETRIEVER_VECTOR:
+            return self.vectorstore.as_retriever(search_kwargs={"k": k})
+
+        corpus = load_bm25_corpus(self.CHROMA_DIR)
+        if not corpus:
+            return self.vectorstore.as_retriever(search_kwargs={"k": k})
+
+        bm25, docs = build_bm25_index(corpus)
+        vector = self.get_vector_retriever(k=max(k, 4))
+        hybrid = HybridRetriever(
+            vector_retriever=vector,
+            bm25=bm25,
+            corpus=docs,
+            k=k,
+            fetch_k=max(k * 2, 8),
+        )
+
+        if resolved == RETRIEVER_HYBRID:
+            return hybrid
+
+        entity_boost = EntityBoostRetriever(
+            base_retriever=hybrid,
+            query_entities=[],
+            k=k,
+        )
+
+        if resolved == RETRIEVER_ENTITY:
+            return _QueryEntityRetriever(inner=entity_boost, k=k)
+
+        summaries = load_community_summaries()
+        if not summaries and load_graph_store() is not None:
+            refresh_community_summaries()
+            summaries = load_community_summaries()
+
+        graph_retriever = GraphAugmentedRetriever(
+            base_retriever=entity_boost,
+            community_summaries=list(summaries.values()),
+            k=k,
+        )
+        return _QueryEntityRetriever(
+            inner=graph_retriever,
+            k=k,
+            include_communities=True,
+        )
+
+    def get_retrieval_chain(self, k: int = 4, mode: str | None = None):
         """LCEL chain: query -> retriever -> formatted context string."""
-        return self.get_retriever(k=k) | RunnableLambda(_format_docs)
+        return self.get_retriever(k=k, mode=mode) | RunnableLambda(_format_docs)
 
     def load_pdf(self, file_path: Path) -> List[Document]:
         """Load and chunk a PDF file"""
@@ -108,12 +182,16 @@ class EntsoeRagSystem:
         except Exception:
             return False
 
-    def index_documents(self, force_rebuild: bool = False) -> int:
-        """Index all PDFs into the vector store.
+    def _annotate_chunks(self, chunks: List[Document]) -> List[Document]:
+        """Attach entity tags used by entity-boosted retrieval."""
+        for chunk in chunks:
+            names = entity_names_for_chunk(chunk.page_content)
+            if names:
+                chunk.metadata["entities"] = ",".join(names)
+        return chunks
 
-        Idempotent: if the collection already has content and ``force_rebuild``
-        is False, this is a no-op and returns the existing chunk count.
-        """
+    def index_documents(self, force_rebuild: bool = False) -> int:
+        """Index all PDFs into the vector store and BM25 corpus."""
         if force_rebuild:
             chroma_path = Path(self.CHROMA_DIR)
             if chroma_path.exists():
@@ -131,6 +209,7 @@ class EntsoeRagSystem:
             return 0
 
         chunks = self.text_splitter.split_documents(documents)
+        chunks = self._annotate_chunks(chunks)
         ids = [
             _chunk_id(
                 c.metadata.get("source", "unknown"),
@@ -140,6 +219,7 @@ class EntsoeRagSystem:
             for c in chunks
         ]
         self.vectorstore.add_documents(chunks, ids=ids)
+        save_bm25_corpus(chunks, self.CHROMA_DIR)
         return len(chunks)
 
     def search(self, query: str, k: int = 4) -> List[DocumentChunk]:
@@ -168,10 +248,68 @@ class EntsoeRagSystem:
             f"[Source: {c.source} p.{c.page}]\n{c.content}" for c in chunks
         )
 
-    def get_context_via_retriever(self, query: str, k: int = 4) -> str:
-        """Get formatted context via LangChain retriever + LCEL chain."""
-        chain = self.get_retrieval_chain(k=k)
-        return chain.invoke(query)
+    def get_context_via_retriever(
+        self, query: str, k: int = 4, mode: str | None = None
+    ) -> str:
+        """Get formatted context via configured retriever chain."""
+        resolved = get_retriever_mode(mode)
+        chain = self.get_retrieval_chain(k=k, mode=resolved)
+        context = chain.invoke(query)
+
+        if resolved == RETRIEVER_GRAPH:
+            graph_ctx = get_multi_hop_context(query)
+            if graph_ctx:
+                context = graph_ctx + "\n\n" + context
+
+        return context
+
+
+class _QueryEntityRetriever(BaseRetriever):
+    """Inject per-query entity names into entity-boosted retrievers."""
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    inner: BaseRetriever
+    k: int = 4
+    include_communities: bool = False
+
+    def _get_relevant_documents(
+        self,
+        query: str,
+        *,
+        run_manager: CallbackManagerForRetrieverRun | None = None,
+    ) -> list[Document]:
+        store = load_graph_store()
+        entities: list[str] = []
+        if store is not None:
+            entities = [node.name for node in find_entities_in_query(query, store)]
+
+        if isinstance(self.inner, GraphAugmentedRetriever):
+            summaries = load_community_summaries()
+            if not summaries and store is not None:
+                refresh_community_summaries()
+                summaries = load_community_summaries()
+            relevant = []
+            lowered = query.lower()
+            for summary in summaries.values():
+                if any(name.lower() in summary.lower() for name in entities):
+                    relevant.append(summary)
+                elif any(token in lowered for token in ("fcr", "afrr", "mfrr")):
+                    if any(
+                        token in summary.lower() for token in ("fcr", "afrr", "mfrr")
+                    ):
+                        relevant.append(summary)
+            self.inner.community_summaries = relevant[:2]
+
+        if isinstance(self.inner, EntityBoostRetriever):
+            self.inner.query_entities = entities
+        elif isinstance(self.inner, GraphAugmentedRetriever) and isinstance(
+            self.inner.base_retriever, EntityBoostRetriever
+        ):
+            self.inner.base_retriever.query_entities = entities
+
+        docs = self.inner.invoke(query)
+        return docs[: self.k]
 
 
 def get_default_rag() -> EntsoeRagSystem:

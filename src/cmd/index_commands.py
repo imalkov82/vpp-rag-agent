@@ -37,6 +37,7 @@ def index_command(rebuild: bool, with_graph: bool, use_llm: bool) -> None:
 
     if with_graph:
         from src.service.graph_ingest import index_graph
+        from src.service.graph_search import refresh_community_summaries
 
         node_count = index_graph(force_rebuild=rebuild, use_llm=use_llm, rag=rag)
         if node_count == 0:
@@ -45,7 +46,9 @@ def index_command(rebuild: bool, with_graph: bool, use_llm: bool) -> None:
                 style="yellow",
             )
         else:
+            summary_count = refresh_community_summaries()
             console.print(
-                f"Knowledge graph ready ({node_count} nodes).",
+                f"Knowledge graph ready ({node_count} nodes, "
+                f"{summary_count} communities).",
                 style="green",
             )

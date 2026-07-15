@@ -1,6 +1,7 @@
 """Tests for graph ingest heuristics."""
 
 from src.models.graph import NodeLabel
+from src.service.entity_tags import entity_names_for_chunk
 from src.service.graph_ingest import extract_triples_heuristic, is_graph_indexed
 
 
@@ -15,6 +16,12 @@ class TestGraphIngest:
         assert "FCR" in objects
         assert "SO GL" in objects
         assert "MENTIONS" in predicates
+
+    def test_entity_names_for_chunk(self):
+        text = "FCR and SO GL requirements for balancing reserves."
+        names = entity_names_for_chunk(text)
+        assert "FCR" in names
+        assert "SO GL" in names
 
     def test_extract_triples_heuristic_empty_text(self):
         assert extract_triples_heuristic("no matching terms here", "x.pdf", 1) == []

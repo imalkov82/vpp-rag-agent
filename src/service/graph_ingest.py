@@ -9,6 +9,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_ollama import ChatOllama
 
 from src.models.graph import ChunkExtraction, NodeLabel, RegulationTriple
+from src.service.entity_tags import find_known_terms
 from src.service.graph_store import (
     GRAPH_DB_DIR,
     NetworkXGraphStore,
@@ -17,24 +18,6 @@ from src.service.graph_store import (
 )
 from src.service.rag import EntsoeRagSystem, get_default_rag
 
-KNOWN_CONCEPTS: dict[str, NodeLabel] = {
-    "fcr": NodeLabel.BALANCING_PRODUCT,
-    "afrr": NodeLabel.BALANCING_PRODUCT,
-    "mfrr": NodeLabel.BALANCING_PRODUCT,
-    "imbalance settlement": NodeLabel.CONCEPT,
-    "balancing reserve": NodeLabel.CONCEPT,
-    "capacity allocation": NodeLabel.CONCEPT,
-    "day-ahead": NodeLabel.CONCEPT,
-    "network code": NodeLabel.NETWORK_CODE,
-}
-
-KNOWN_NETWORK_CODES: dict[str, str] = {
-    "so gl": "SO GL",
-    "eb gl": "EB GL",
-    "nc rfg": "NC RfG",
-    "nc cacm": "NC CACM",
-}
-
 EXTRACTION_PROMPT = (
     "Extract regulation knowledge as subject-predicate-object triples from the "
     "chunk. Focus on balancing products, network codes, grid requirements, and "
@@ -42,31 +25,11 @@ EXTRACTION_PROMPT = (
 )
 
 
-def _find_known_terms(text: str) -> list[tuple[str, NodeLabel]]:
-    lowered = text.lower()
-    found: list[tuple[str, NodeLabel]] = []
-    seen: set[str] = set()
-
-    for term, label in sorted(KNOWN_CONCEPTS.items(), key=lambda item: -len(item[0])):
-        if term in lowered and term not in seen:
-            found.append((term.upper() if len(term) <= 4 else term.title(), label))
-            seen.add(term)
-
-    for term, display in sorted(
-        KNOWN_NETWORK_CODES.items(), key=lambda item: -len(item[0])
-    ):
-        if term in lowered and display not in seen:
-            found.append((display, NodeLabel.NETWORK_CODE))
-            seen.add(display)
-
-    return found
-
-
 def extract_triples_heuristic(
     text: str, source_doc: str, page: int
 ) -> list[RegulationTriple]:
     """Extract triples using domain keyword matching (no LLM required)."""
-    terms = _find_known_terms(text)
+    terms = find_known_terms(text)
     if not terms:
         return []
 
@@ -166,10 +129,7 @@ def index_graph(
     use_llm: bool = False,
     rag: EntsoeRagSystem | None = None,
 ) -> int:
-    """Build or rebuild the regulation knowledge graph from PDF chunks.
-
-    Returns the number of graph nodes after indexing.
-    """
+    """Build or rebuild the regulation knowledge graph from PDF chunks."""
     rag = rag or get_default_rag()
 
     if force_rebuild:

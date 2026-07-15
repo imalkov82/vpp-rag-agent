@@ -74,6 +74,8 @@ dmypy.json
 # Project-specific
 .chroma_db/
 .graph_db/
+.agent_db/
 data/pdfs/
 .claude
 .cursor
+docs/roadmap.md

@@ -20,7 +20,9 @@ dependencies = [
     "lxml>=5.0.0",
     "click>=8.1.0",
     "rich>=13.0.0",
-    "networkx>=3.4.2",
+    "networkx>=3.0",
+    "rank-bm25>=0.2.2",
+    "langgraph-checkpoint-sqlite>=2.0.0",
 ]
 
 [project.scripts]
